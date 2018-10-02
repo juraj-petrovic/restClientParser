@@ -1,0 +1,30 @@
+@host=https://jsonplaceholder.typicode.com
+
+### Get example posts
+# @name getPost2
+GET {{host}}/posts/2 HTTP/1.1
+Authorization: Bearer {{agentToken}}
+content-type: application/json
+
+### POST example post
+POST {{host}}/posts HTTP/1.1
+content-type: application/json
+
+{
+    title: "foo",
+    body: "bar={{getPost2.response.body.title}}",
+    userId: 1
+}
+
+### PUT example post
+PUT {{host}}/posts/1 HTTP/1.1
+content-type: application/json
+
+{
+    title: "foo2",
+    body: "bar2",
+    userId: 1
+}
+
+### DELETE example post
+DELETE {{host}}/posts/{{getPost2.response.body.id}} HTTP/1.1
