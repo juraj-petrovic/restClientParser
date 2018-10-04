@@ -8,12 +8,10 @@ import collection.JavaConverters._
   */
 object RestClientParser extends App {
   import fastparse.all._
-
-  //val file = Files.readAllLines(Paths.get("./resources/member-aeroplan-cycles.rest"), StandardCharsets.UTF_8).asScala.mkString("\n")
-  val fileText = Files.readAllLines(Paths.get("./resources/mini.rest"), StandardCharsets.UTF_8).asScala.mkString("\n")
+  val fileText = Files.readAllLines(Paths.get("./resources/new.rest"), StandardCharsets.UTF_8).asScala.mkString("\n")
   //println(fileText)
-  case class GlobalVariable(name: String, value: String)
-  case class CallName(name: String)
+  case class Variable(name: String, value: String)
+  case class BlockName(name: String)
   case class CallId(id: String)
   case class Call(method: HttpMethod, url: Seq[Expression])
   case class Header(name: String, url: Seq[Expression])
@@ -22,38 +20,42 @@ object RestClientParser extends App {
   case class VariableExpression(exp: String) extends Expression
   case class Constant(const: String) extends Expression
   case class Body(body: Seq[Seq[Expression]])
-  case class TestCase(callName: CallName, callId: Option[CallId], call: Call, headers: Seq[Header], body: Option[Body])
-  case class TestFile(globalVariables: Seq[GlobalVariable], testCases: Seq[TestCase])
+  trait Block
+  case class GlobalVariablesBlock(blockName: BlockName, globalVariables: Seq[Variable]) extends Block
+  case class TestCaseBlock(blockName: BlockName, callId: Option[CallId], globalVariables: Seq[Variable], call: Call, headers: Seq[Header], body: Option[Body]) extends Block
+  case class TestFile(globalVariables: Seq[Variable], blocks: Seq[Block])
   val ws0 = P(" ").rep
   val ws = P(" ").rep(1)
   val nl = P("\n").rep(1)
-  val emptyLine = (nl)
+  val comment = P((("#" ~ !"##" ~ !" @name") | ("//" ~ !" @name")) ~ (!"\n" ~ AnyChar).rep)
+  val emptyLine = P(comment | nl).log()
 
-  val callName = P("###" ~/  CharsWhile(_ != '\n').! ~ nl).map(CallName)
-  val callId = P("# @name " ~/  CharsWhile(_ != '\n').! ~ nl).map(CallId)
-  val globalVariables = P("@" ~/  CharsWhile(_ != '=').! ~/ P("=") ~/ CharsWhile(_ != '\n').! ~ nl).map(GlobalVariable.tupled).rep
+  val blockName = P("###" ~ (!"\n" ~ AnyChar.!).rep ~ nl).map(x => BlockName(x.mkString(""))).log()
+  val callId = P(("# @name " | "// @name")  ~/  CharsWhile(_ != '\n').! ~ nl).map(CallId)
+  val variables = P("@" ~/  CharsWhile(_ != '=').! ~/ P("=") ~/ CharsWhile(_ != '\n').! ~ nl).map(Variable.tupled).log().rep
   val variable = P("{{" ~/ CharsWhile(_ != '}').! ~ "}}").!.map( x => VariableExpression(x))
   val constant = P((!"{{" ~ !"\n" ~ AnyChar.!).rep(min = 1).!).map( x => Constant(x))
   val constantNoSpaces = P(CharsWhile(c => c != '\n' && c != ' ').!).map( x => Constant(x))
   val stringExpression = P(variable | constantNoSpaces).rep //no spaces
-  val jsonStringExpression = P(variable.log() | (!"{{" ~ constant.log())).rep.log() //no spaces
-  val bodyStringExpressionLine = !"###" ~ P(variable | ( !"{{" ~ constant)).rep ~ nl
+  val jsonStringExpression = P(variable.log() | constant.log()).rep.log() //no spaces
+  val bodyStringExpressionLine = P(!("###" | End | comment) ~ P(variable.log() | constant.log()).rep ~ nl.rep)
   val method = P("GET" | "POST" | "PUT" | "DELETE").!.map(HttpMethod)
   val protocol = P("HTTP/1.1")
-  val call = P( method ~/ ws ~/ stringExpression ~/ ws ~/ protocol ~/ nl.?).map(Call.tupled)
+  val call = P( method ~ ws ~/ stringExpression ~/ ws.? ~/ protocol.? ~/ nl.?).map(Call.tupled)
   val headerFirstPart = P(CharsWhileIn(('A' to 'Z') ++ ('a' to 'z') :+ '-')).!.log()
-  val header = P(headerFirstPart.! ~ ":" ~ ws ~ jsonStringExpression).log().map(Header.tupled)
-  val body = P(bodyStringExpressionLine.rep ~ &("###")).map(Body)
-  val testCase = P(callName ~ emptyLine.? ~ callId.? ~ emptyLine.? ~ call ~ header.rep(sep = "\n") ~ emptyLine.? ~ body.? ~ emptyLine.?).map(TestCase.tupled)
-  val testFile = P(emptyLine.rep() ~ globalVariables ~ emptyLine.rep() ~ testCase.rep() ~ End).map(TestFile.tupled)
+  val header = P(headerFirstPart.! ~ ":" ~ ws ~ jsonStringExpression ~ nl).log().map(Header.tupled)
+  val body = P(bodyStringExpressionLine.log().rep ~ &("###" | End | comment)).map(Body).log()
+  val globalVariablesBlock = P(blockName ~ emptyLine.rep ~ variables ~ emptyLine.rep ~ !method ~ &("###")).map(GlobalVariablesBlock.tupled).log()
+  val testCaseBlock = P(blockName ~ emptyLine.rep ~ callId.? ~ emptyLine.rep ~ variables ~ emptyLine.rep ~ call ~ header.rep ~ emptyLine.rep.log() ~ body.log().? ~ emptyLine.rep).map(TestCaseBlock.tupled).log()
+  val testFile = P(emptyLine.rep() ~ variables ~ emptyLine.rep ~ (globalVariablesBlock | testCaseBlock).rep() ~ End).map(TestFile.tupled)
   val number: P[Int] = P( CharIn('0'to'9').rep(1).!.map(_.toInt) )
 
     val x = testFile.parse(fileText)
 
     x match {
-      case a@Success(x,y) => println(x)
-      case a@Failure(lastParser,index, extra) =>
-        println(""+ a + " " + extra.traced.toString)
+      case a@Success(x,y) => println("Success:" +  x)
+      case a@Failure(lastParser,index, extra) => println(x)
+       // println(""+ a + " " + extra.traced.toString)
     }
 
 }

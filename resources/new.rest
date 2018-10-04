@@ -1,0 +1,36 @@
+@baseUrl = https://example.com/api
+
+###
+# @name login
+POST {{baseUrl}}/api/login HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+name=foo&password=bar
+
+###
+
+# @name createComment
+POST {{baseUrl}}/comments HTTP/1.1
+Authorization: {{login.response.headers.X-AuthToken}}
+Content-Type: application/json
+
+{
+    "content": "fake content"
+}
+
+###
+
+# @name getCreatedComment
+GET {{baseUrl}}/comments/{{createComment.response.body.$.id}} HTTP/1.1
+Authorization: {{login.response.headers.X-AuthToken}}
+
+###
+
+# @name getReplies
+GET {{baseUrl}}/comments/{{createComment.response.body.$.id}}/replies HTTP/1.1
+Accept: application/xml
+
+###
+
+# @name getFirstReply
+GET {{baseUrl}}/comments/{{createComment.response.body.$.id}}/replies/{{getReplies.response.body.//reply[1]/@id}}
