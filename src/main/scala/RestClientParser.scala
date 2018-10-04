@@ -9,7 +9,6 @@ import collection.JavaConverters._
 object RestClientParser extends App {
   import fastparse.all._
 
-  //val file = Files.readAllLines(Paths.get("./resources/member-aeroplan-cycles.rest"), StandardCharsets.UTF_8).asScala.mkString("\n")
   val fileText = Files.readAllLines(Paths.get("./resources/mini.rest"), StandardCharsets.UTF_8).asScala.mkString("\n")
   //println(fileText)
   case class GlobalVariable(name: String, value: String)
