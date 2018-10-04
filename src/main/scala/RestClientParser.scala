@@ -6,7 +6,7 @@ import collection.JavaConverters._
 /**
   * Created by Jupe on 2.10.2018.
   */
-object ResClientParser extends App {
+object RestClientParser extends App {
   import fastparse.all._
 
   //val file = Files.readAllLines(Paths.get("./resources/member-aeroplan-cycles.rest"), StandardCharsets.UTF_8).asScala.mkString("\n")
